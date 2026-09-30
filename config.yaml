@@ -1,0 +1,209 @@
+# PySpark Configuration
+spark:
+  app_name: "TelcoCustomerChurnPrediction"
+  master: "local[*]"  # Use all available cores locally
+  config:
+    spark.sql.adaptive.enabled: "true"
+    spark.sql.adaptive.coalescePartitions.enabled: "true"
+    spark.serializer: "org.apache.spark.serializer.KryoSerializer"
+    spark.sql.execution.arrow.pyspark.enabled: "true"  # Enable Arrow optimization
+    spark.sql.adaptive.skewJoin.enabled: "true"
+    spark.default.parallelism: "4"
+    spark.sql.shuffle.partitions: "200"
+  memory:
+    driver_memory: "4g"
+    executor_memory: "2g"
+    max_result_size: "2g"
+
+data_paths:
+  raw_data: "data/raw/TelcoCustomerChurnPrediction.csv"
+  processed_data: "data/processed/"
+  artifacts_dir: "artifacts"
+  data_artifacts_dir: "artifacts/data"
+  model_artifacts_dir: "artifacts/models"
+  # PySpark uses Parquet format for better performance
+  X_train: "artifacts/data/X_train.parquet"
+  X_test: "artifacts/data/X_test.parquet" 
+  Y_train: "artifacts/data/Y_train.parquet"
+  Y_test: "artifacts/data/Y_test.parquet"
+  # Feature pipeline artifacts
+  pipeline_path: "artifacts/models/feature_pipeline"
+  ml_pipeline_path: "artifacts/models/ml_pipeline"
+
+columns:
+  target: "Churn"
+  drop_columns: ["customerID"]
+  critical_columns: []
+  outlier_columns: []
+  nominal_columns: [
+                    'gender', 'SeniorCitizen', 'Partner', 'PhoneService', 'Dependents', 'OnlineSecurity', 'DeviceProtection', 
+                    'TechSupport', 'StreamingTV','StreamingMovies', 'PaperlessBilling', 'PaymentMethod',]
+  ordinal_columns: ['Contract',]
+  numeric_columns: ['MonthlyCharges', 'TotalCharges', 'tenure']
+  feature_columns:
+      - "gender"
+      - "SeniorCitizen"
+      - "Partner"
+      - "Dependents"
+      - "tenure"
+      - "PhoneService"
+      - "MultipleLines"
+      - "InternetService"
+      - "OnlineSecurity"
+      - "OnlineBackup"
+      - "DeviceProtection"
+      - "TechSupport"
+      - "StreamingTV"
+      - "StreamingMovies"
+      - "Contract"
+      - "PaperlessBilling"
+      - "PaymentMethod"
+      - "MonthlyCharges"
+      - "TotalCharges"
+
+missing_values:
+  strategy: "fill"
+  methods:
+    gender:
+      strategy: "fill"
+      method: "mode"
+      relevant_column: "Gender"
+      use_gender_imputer: true
+
+outlier_detection:
+  detection_method: "iqr"
+  handling_method: "remove"
+  z_score_threshold: 3.0
+
+feature_binning:
+  tenure_bins:
+    New: [0, 24]
+    Established: [25, 48]
+    Loyal: [49, 72]
+
+feature_encoding:
+  nominal_columns: [
+                    'gender', 'SeniorCitizen', 'Partner', 'PhoneService', 'Dependents', 'OnlineSecurity', 'DeviceProtection', 
+                    'TechSupport', 'StreamingTV','StreamingMovies', 'PaperlessBilling', 'PaymentMethod', 'MultipleLines', 'Churn', 
+                    'InternetService', OnlineBackup]
+  ordinal_mappings:
+    Contract:
+      Month-to-month: 0
+      One year: 1
+      Two year: 2
+    tenureBins:
+      New: 0
+      Established: 1
+      Loyal: 2
+
+
+feature_scaling:
+  scaling_type: "minmax"
+  columns_to_scale: ['MonthlyCharges', 'TotalCharges']
+
+data_splitting:
+  split_type: "simple"
+  test_size: 0.2
+  random_state: 42
+  n_splits: 5
+
+training:
+  default_model_type: "random_forest"
+  default_training_strategy: "cv"
+  cv_folds: 5
+  random_state: 42
+  test_size: 0.2
+  validation_split: 0.2
+  early_stopping_patience: 10
+  max_iterations: 1000
+  hyperparameter_tuning:
+    enabled: false
+    search_method: "grid"
+    cv_folds: 5
+    n_iter: 20
+
+model:
+  # PySpark ML algorithms
+  model_type: "gbt_classifier"  # Gradient Boosted Trees
+  training_strategy: "cv"
+  data_path: "data/raw/TelcoCustomerChurnPrediction.csv"
+  model_path: "artifacts/models/churn_prediction_pipeline"
+  evaluation_path: "artifacts/evaluation/model_evaluation_report.json"
+  # PySpark ML model parameters
+  model_params:
+    max_iter: 100
+    max_depth: 10
+    step_size: 0.1
+    seed: 42
+  model_types:
+    gbt_classifier:  # GradientBoostedTreesClassifier
+      max_iter: 100
+      max_depth: 10
+      step_size: 0.1
+      seed: 42
+    random_forest_classifier:
+      num_trees: 100
+      max_depth: 10
+      seed: 42
+      feature_subset_strategy: "auto"
+    logistic_regression:
+      max_iter: 1000
+      reg_param: 0.01
+      elastic_net_param: 0.0
+      family: "binomial"
+    decision_tree_classifier:
+      max_depth: 10
+      seed: 42
+      impurity: "gini"
+
+evaluation:
+  metrics:
+    - "accuracy"
+    - "precision"
+    - "recall"
+    - "f1-score"
+  cv_folds: 5
+  random_state: 42
+
+deployment:
+  model_name: "telco_customer_churn_analysis_model"
+  model_version: "1.0.0"
+  api_endpoint: "/predict"
+  batch_size: 
+
+inference:
+  model_name: "random_forest_cv_model"
+  data_path: "artifacts/data/X_test.csv"
+  sample_size: 100
+  save_path: "artifacts/predictions/predictions.csv"
+  batch_size: 7043
+  return_proba: true
+
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(levelname)s - %(message)s"
+  file: "pipeline.log"
+
+mlflow:
+  tracking_uri: "file:./mlruns"  # Local file-based tracking
+  experiment_name: "Telco Customer Churn Analysis - PySpark"
+  model_registry_name: "telco_customer_churn_prediction_pyspark"
+  artifact_path: "TelcoCustomerChurnModel"
+  run_name_prefix: "pyspark_churn_run"
+  tags:
+    project: "telco_customer_churn_prediction"
+    team: "ml_engineering"
+    environment: "development"
+    framework: "pyspark_ml"
+    distributed: "true"
+  autolog: false  # Disable autolog for PySpark, use manual logging
+
+environment:
+  experiment_name: "churn_analysis"
+
+pipeline:
+  data_pipeline_name: "data_processing_pipeline"
+  training_pipeline_name: "model_training_pipeline"
+  deployment_pipeline_name: "model_deployment_pipeline"
+  inference_pipeline_name: "inference_pipeline"
+  enable_cache: false
